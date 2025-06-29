@@ -13,11 +13,26 @@ def client():
 @pytest.fixture(autouse=True)
 def clean_db():
     test_db_path = 'finance.db'
+    if db_manager is not None and db_manager.connection:
+        db_manager.close()  # ← fecha conexão ativa
+
     if os.path.exists(test_db_path):
-        os.remove(test_db_path)
+        try:
+            os.remove(test_db_path)
+        except PermissionError:
+            print("Erro: arquivo está em uso. Tentando novamente após aguardar...")
+            import time
+            time.sleep(0.5)
+            os.remove(test_db_path)
+
     yield
+
+    if db_manager is not None and db_manager.connection:
+        db_manager.close()
+
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
+
 
 @pytest.fixture
 def prepare_user():
