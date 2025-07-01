@@ -125,7 +125,7 @@ def test_delete_transaction(client, prepare_user):
     data = res3.get_json()
     assert not any(tx.get("id") == tx_id for tx in data)
 
-def test_filter_by_category(client, prepare_user):
+def test_filter_by_category_one_category(client, prepare_user):
     user = "test_user5"
     prepare_user(user)
 
@@ -143,6 +143,41 @@ def test_filter_by_category(client, prepare_user):
     assert res.status_code == 200
     data = res.get_json()
     assert all(tx["category"] == "Alimentação" for tx in data)
+
+def test_filter_by_category_multiple_categories(client, prepare_user):
+    user = "test_user6"
+    prepare_user(user)
+
+    # Add transactions in different categories
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-06-10", "description": "Cinema", "category": "Entretenimento",
+        "amount": 30.00, "type": "Despesa"
+    })
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-06-15", "description": "Restaurante", "category": "Alimentação",
+        "amount": 70.00, "type": "Despesa"
+    })
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-06-20", "description": "Livros", "category": "Educação",
+        "amount": 45.00, "type": "Despesa"
+    })
+
+    res = client.get(f"/users/{user}/transactions/category/Alimentação")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["description"] == "Restaurante"
+
+def test_filter_by_category_no_transactions(client, prepare_user):
+    user = "test_user_no_transactions"
+    prepare_user(user)
+
+    res = client.get(f"/users/{user}/transactions/category/Alimentação")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert isinstance(data, list)
+    assert len(data) == 0
 
 def test_get_debit_transactions(client, prepare_user):
     """
