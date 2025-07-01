@@ -14,17 +14,13 @@ def client():
 def clean_db():
     test_db_path = 'finance.db'
     if db_manager is not None and db_manager.connection:
-        db_manager.close()  # ← fecha conexão ativa
+        db_manager.close()
 
     if os.path.exists(test_db_path):
-        try:
-            os.remove(test_db_path)
-        except PermissionError:
-            print("Erro: arquivo está em uso. Tentando novamente após aguardar...")
-            import time
-            time.sleep(0.5)
-            os.remove(test_db_path)
+        os.remove(test_db_path)
 
+    initialize_database()
+    
     yield
 
     if db_manager is not None and db_manager.connection:
@@ -41,11 +37,8 @@ def prepare_user():
 
     def _prepare(user: str):
         if user not in created_users:
-            db = DatabaseManager('finance.db')
-            if db.check_username_availability(user):
-                db.create_user_table(user)
-            db.close()
-            initialize_database()
+            if db_manager.check_username_availability(user):
+                db_manager.create_user_table(user)
             created_users.add(user)
 
     return _prepare
