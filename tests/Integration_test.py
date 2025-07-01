@@ -6,16 +6,21 @@ from src.db_manager import DatabaseManager
 
 @pytest.fixture
 def client():
+    """Provides a test client for the Flask application."""
     app.config['TESTING'] = True
     with app.test_client() as client:
         yield client
 
 @pytest.fixture(autouse=True)
 def clean_db():
+    """
+    This autouse fixture ensures that every test runs with a fresh, empty database.
+    It handles the complete setup and teardown of the database file and connection.
+    """
     test_db_path = 'finance.db'
+
     if db_manager is not None and db_manager.connection:
         db_manager.close()
-
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
 
@@ -25,27 +30,12 @@ def clean_db():
 
     if db_manager is not None and db_manager.connection:
         db_manager.close()
-
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
 
 
-@pytest.fixture
-def prepare_user():
-
-    created_users = set()
-
-    def _prepare(user: str):
-        if user not in created_users:
-            if db_manager.check_username_availability(user):
-                db_manager.create_user_table(user)
-            created_users.add(user)
-
-    return _prepare
-
-def test_create_transaction(client, prepare_user):
+def test_create_transaction(client):
     user = "test_user1"
-    prepare_user(user)
 
     payload = {
         "date": "2025-06-25",
@@ -59,9 +49,8 @@ def test_create_transaction(client, prepare_user):
     json_data = res.get_json()
     assert "transactionId" in json_data
 
-def test_list_transactions(client, prepare_user):
+def test_list_transactions(client):
     user = "test_user2"
-    prepare_user(user)
 
     payload = {
         "date": "2025-06-20",
@@ -79,9 +68,8 @@ def test_list_transactions(client, prepare_user):
     assert isinstance(data, list)
     assert any(tx["description"] == "Supermercado" for tx in data)
 
-def test_update_transaction(client, prepare_user):
+def test_update_transaction(client):
     user = "test_user3"
-    prepare_user(user)
 
     payload = {
         "date": "2025-06-10",
@@ -103,9 +91,8 @@ def test_update_transaction(client, prepare_user):
     res2 = client.put(f"/users/{user}/transactions/{tx_id}", json=updated)
     assert res2.status_code == 200
 
-def test_delete_transaction(client, prepare_user):
+def test_delete_transaction(client):
     user = "test_user4"
-    prepare_user(user)
 
     payload = {
         "date": "2025-06-01",
@@ -124,11 +111,10 @@ def test_delete_transaction(client, prepare_user):
     res3 = client.get(f"/users/{user}/transactions")
     assert res3.status_code == 200
     data = res3.get_json()
-    assert not any(tx["id"] == tx_id for tx in data)
+    assert not any(tx.get("id") == tx_id for tx in data)
 
-def test_filter_by_category(client, prepare_user):
+def test_filter_by_category(client):
     user = "test_user5"
-    prepare_user(user)
 
     payload = {
         "date": "2025-06-05",
