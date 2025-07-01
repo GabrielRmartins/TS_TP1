@@ -143,3 +143,85 @@ def test_filter_by_category(client, prepare_user):
     assert res.status_code == 200
     data = res.get_json()
     assert all(tx["category"] == "Alimentação" for tx in data)
+
+def test_get_debit_transactions(client, prepare_user):
+    """
+    Tests fetching only debit (Despesa) transactions.
+    """
+    user = "test_user_debit"
+    prepare_user(user)
+
+    # Add a credit transaction
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-07-10", "description": "Salary", "category": "Work",
+        "amount": 3000.00, "type": "Receita"
+    })
+    # Add a debit transaction
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-07-15", "description": "Groceries", "category": "Food",
+        "amount": 150.00, "type": "Despesa"
+    })
+
+    res = client.get(f"/users/{user}/transactions/debits")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["description"] == "Groceries"
+    assert data[0]["type"] == "Despesa"
+
+def test_get_credit_transactions(client, prepare_user):
+    """
+    Tests fetching only credit (Receita) transactions.
+    """
+    user = "test_user_credit"
+    prepare_user(user)
+
+    # Add a credit transaction
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-08-01", "description": "Freelance Payment", "category": "Work",
+        "amount": 500.00, "type": "Receita"
+    })
+    # Add a debit transaction
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-08-05", "description": "Dinner", "category": "Food",
+        "amount": 75.00, "type": "Despesa"
+    })
+
+    res = client.get(f"/users/{user}/transactions/credits")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["description"] == "Freelance Payment"
+    assert data[0]["type"] == "Receita"
+
+def test_filter_by_month(client, prepare_user):
+    """
+    Tests filtering transactions by a specific month and year.
+    """
+    user = "test_user_month_filter"
+    prepare_user(user)
+
+    # Transactions in June 2025
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-06-10", "description": "Concert Tickets", "category": "Entertainment",
+        "amount": 120.00, "type": "Despesa"
+    })
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-06-25", "description": "Bonus", "category": "Work",
+        "amount": 1000.00, "type": "Receita"
+    })
+    # Transaction in July 2025
+    client.post(f"/users/{user}/transactions", json={
+        "date": "2025-07-05", "description": "New Book", "category": "Shopping",
+        "amount": 40.00, "type": "Despesa"
+    })
+
+    res = client.get(f"/users/{user}/transactions/month/2025/6")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    # Check that both returned transactions are from June
+    assert all(tx["date"].startswith("2025-06") for tx in data)
