@@ -1,41 +1,50 @@
 import pytest
-from app import app
+from app import app, get_db
 import os
-from app import initialize_database, db_manager
-from src.db_manager import DatabaseManager
 
 @pytest.fixture
 def client():
-    """Provides a test client for the Flask application."""
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
-
-@pytest.fixture(autouse=True)
-def clean_db():
     """
-    This autouse fixture ensures that every test runs with a fresh, empty database.
-    It handles the complete setup and teardown of the database file and connection.
+    A robust fixture that leverages Flask's application context for testing.
+    1. Sets the app to TESTING mode.
+    2. Creates the database within an application context.
+    3. Yields a test client for the test function to use.
+    4. After the test, the @app.teardown_appcontext function we added in
+       app.py automatically handles closing the database connection.
+    5. Finally, the test database file is removed to ensure each test
+       is isolated and starts with a clean slate.
     """
     test_db_path = 'finance.db'
+    app.config['TESTING'] = True
 
-    if db_manager is not None and db_manager.connection:
-        db_manager.close()
-    if os.path.exists(test_db_path):
-        os.remove(test_db_path)
+    with app.app_context():
+        get_db()
+        
+        yield app.test_client()
 
-    initialize_database()
-    
-    yield
-
-    if db_manager is not None and db_manager.connection:
-        db_manager.close()
     if os.path.exists(test_db_path):
         os.remove(test_db_path)
 
 
-def test_create_transaction(client):
+@pytest.fixture
+def prepare_user(client):
+    """
+    This fixture prepares a user by making an API call to create their table.
+    It uses the client provided by the 'client' fixture.
+    """
+    created_users = set()
+    def _prepare(user: str):
+        if user not in created_users:
+            res = client.post(f"/users/{user}")
+            assert res.status_code in [201, 200]
+            created_users.add(user)
+    return _prepare
+
+
+
+def test_create_transaction(client, prepare_user):
     user = "test_user1"
+    prepare_user(user)
 
     payload = {
         "date": "2025-06-25",
@@ -49,8 +58,9 @@ def test_create_transaction(client):
     json_data = res.get_json()
     assert "transactionId" in json_data
 
-def test_list_transactions(client):
+def test_list_transactions(client, prepare_user):
     user = "test_user2"
+    prepare_user(user)
 
     payload = {
         "date": "2025-06-20",
@@ -68,8 +78,9 @@ def test_list_transactions(client):
     assert isinstance(data, list)
     assert any(tx["description"] == "Supermercado" for tx in data)
 
-def test_update_transaction(client):
+def test_update_transaction(client, prepare_user):
     user = "test_user3"
+    prepare_user(user)
 
     payload = {
         "date": "2025-06-10",
@@ -91,8 +102,9 @@ def test_update_transaction(client):
     res2 = client.put(f"/users/{user}/transactions/{tx_id}", json=updated)
     assert res2.status_code == 200
 
-def test_delete_transaction(client):
+def test_delete_transaction(client, prepare_user):
     user = "test_user4"
+    prepare_user(user)
 
     payload = {
         "date": "2025-06-01",
@@ -113,8 +125,9 @@ def test_delete_transaction(client):
     data = res3.get_json()
     assert not any(tx.get("id") == tx_id for tx in data)
 
-def test_filter_by_category(client):
+def test_filter_by_category(client, prepare_user):
     user = "test_user5"
+    prepare_user(user)
 
     payload = {
         "date": "2025-06-05",
